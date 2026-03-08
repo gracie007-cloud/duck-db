@@ -157,7 +157,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
                                                       OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	if (filter_pushdown && !gstate.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(client, nullptr, *gstate.global_filter_state, *this);
+		(void)filter_pushdown->Finalize(client, *gstate.global_filter_state, *this);
 	}
 
 	gstate.table->Finalize(client, input.interrupt_state);
@@ -572,7 +572,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
-			state.lhs_payload.Verify();
+			state.lhs_payload.Verify(context.client.db);
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
@@ -690,7 +690,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
-			chunk.Verify();
+			chunk.Verify(context.client.db);
 		}
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -711,7 +711,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 		}
 	}
 
-	input.Verify();
+	input.Verify(context.client.db);
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:

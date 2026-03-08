@@ -32,7 +32,7 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/optimizer/sum_rewriter.hpp"
+#include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
@@ -40,6 +40,7 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -138,10 +139,10 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
-	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
-	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
-		SumRewriterOptimizer optimizer(*this);
-		optimizer.Optimize(plan);
+	// Rewrites AVG(x) -> SUM(x)/COUNT(x) and SUM(x+C) -> SUM(x) + C*COUNT(x)
+	RunOptimizer(OptimizerType::AGGREGATE_FUNCTION_REWRITER, [&]() {
+		AggregateFunctionRewriter aggregate_function_rewriter(*this);
+		aggregate_function_rewriter.Optimize(plan);
 	});
 
 	// perform filter pullup
@@ -196,6 +197,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::WINDOW_SELF_JOIN, [&]() {
 		WindowSelfJoinOptimizer window_self_join_optimizer(*this);
 		plan = window_self_join_optimizer.Optimize(std::move(plan));
+	});
+
+	// Pull up projection from joins
+	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
+		ProjectionPullup projection_pullup(*this, *plan);
+		projection_pullup.Optimize(plan);
 	});
 
 	// then we perform the join ordering optimization

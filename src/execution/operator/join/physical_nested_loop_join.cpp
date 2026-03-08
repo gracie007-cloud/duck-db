@@ -255,7 +255,7 @@ SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &eve
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gsink = input.global_state.Cast<NestedLoopJoinGlobalState>();
 	if (filter_pushdown && !gsink.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(context, nullptr, *gsink.global_filter_state, *this);
+		(void)filter_pushdown->Finalize(context, *gsink.global_filter_state, *this);
 	}
 
 	gsink.right_outer.Initialize(gsink.right_payload_data.Count());
@@ -444,9 +444,9 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		auto &right_payload = state.right_payload;
 
 		// sanity check
-		left_chunk.Verify();
-		right_condition.Verify();
-		right_payload.Verify();
+		left_chunk.Verify(context.client.db);
+		right_condition.Verify(context.client.db);
+		right_payload.Verify(context.client.db);
 
 		// now perform the join
 		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
